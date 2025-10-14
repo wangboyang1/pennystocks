@@ -7,7 +7,13 @@ exports.handler = async (event) => {
   }
 
   try {
-    const response = await fetch(url);
+    // Add a User-Agent header to identify the request to Reddit's servers.
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Netlify Function - Reddit Stock Analyzer v1.0'
+      }
+    });
+
     if (!response.ok) {
       return { statusCode: response.status, body: JSON.stringify({ error: `Failed to fetch from Reddit: ${response.statusText}` }) };
     }
