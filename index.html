@@ -189,9 +189,7 @@
 
 
         // API and Globals
-        const API_KEY = ""; // In a real app, this would be handled securely on a server.
-        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${API_KEY}`;
-        const PROXY_URL = 'https://corsproxy.io/?';
+        const PROXY_URL = 'https://api.allorigins.win/raw?url=';
         const REDDIT_TOP_URL = `${PROXY_URL}${encodeURIComponent('https://www.reddit.com/r/pennystocks/search.json?q=&restrict_sr=on&sort=top&t=month&limit=100')}`;
         const REDDIT_HOT_URL = `${PROXY_URL}${encodeURIComponent('https://www.reddit.com/r/pennystocks/hot.json?limit=100')}`;
         let sandboxRefreshInterval = null;
@@ -320,7 +318,7 @@
         }
 
 
-        // --- MAIN PAGE LOGIC (UNCHANGED FROM PREVIOUS) ---
+        // --- MAIN PAGE LOGIC ---
 
         // Helper for exponential backoff
         const fetchWithBackoff = async (url, options, retries = 5, delay = 1000) => {
@@ -333,9 +331,15 @@
                         await new Promise(resolve => setTimeout(resolve, delay));
                         delay *= 2; // Exponential backoff
                     } else {
+                         // For CORS proxy errors, the status might be 200 but the content is an error page
+                        const text = await response.text();
+                        if (text.toLowerCase().includes('cors')) {
+                             throw new Error(`CORS Proxy Error: ${response.status}`);
+                        }
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
                 } catch (error) {
+                    console.error(`Fetch attempt ${i + 1} failed for ${url.substring(0,100)}...`, error);
                     if (i === retries - 1) throw error;
                     await new Promise(resolve => setTimeout(resolve, delay));
                     delay *= 2;
@@ -404,49 +408,31 @@
                     });
                 }
             }
+            // Reddit API for search with sort=top already returns posts sorted by upvotes
             return validPosts;
         }
 
         // Function to get real analysis from Gemini AI
         async function getRealAiAnalysis(stock) {
-            const systemPrompt = `You are a cautious financial analyst specializing in speculative penny stocks. Your analysis must be objective and highlight risks. For the given stock ticker, provide a structured JSON response with the following schema: {"companyName": "string", "intrinsicValue": "string", "profitPossibility": "string", "sellingPoint": "number", "stopLoss": "number"}.
-- First, analyze the provided 'Reddit Post Content' for any explicitly mentioned 'price target', 'PT', 'target price', or 'selling point'.
-- If a specific price is mentioned in the post, you MUST use that value for the 'sellingPoint' in your JSON response.
-- If no target is mentioned in the post, then generate your own plausible target price that is higher than the current price.
-- companyName: The full legal name of the company.
-- intrinsicValue: A brief, one-sentence analysis of its potential intrinsic value based on fundamentals, or lack thereof.
-- profitPossibility: A short-term profit outlook (e.g., 'Highly speculative, momentum-driven', 'High risk, catalyst dependent').
-- stopLoss: A plausible stop-loss price to manage downside risk, as a number. This MUST be lower than the current price.`;
-            
-            const truncatedBody = stock.postBody.substring(0, 2000);
-            const userQuery = `Analyze the penny stock with ticker: ${stock.ticker}.
-Current live price: $${stock.price}.
-Reddit Post Title: "${stock.postTitle}".
-Reddit Post Content: "${truncatedBody}".
-Provide the analysis in the specified JSON format, following all instructions.`;
-
-
-            const payload = {
-                contents: [{ parts: [{ text: userQuery }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                generationConfig: {
-                    responseMimeType: "application/json",
-                }
-            };
-            
             try {
-                const response = await fetchWithBackoff(GEMINI_API_URL, {
+                const response = await fetch('/api/getAiAnalysis', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({ stock: stock })
                 });
-                const result = await response.json();
-                const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
-                if (!jsonText) throw new Error("Invalid AI response structure.");
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `Request failed with status ${response.status}`);
+                }
+                
+                // The serverless function returns the JSON text directly in the body
+                const jsonText = await response.text();
                 return JSON.parse(jsonText);
+
             } catch (error) {
-                console.error("Gemini API call failed:", error);
-                return { error: "AI analysis failed. Please try again." };
+                console.error("AI analysis function call failed:", error);
+                return { error: "AI analysis failed. This may be due to API rate limits or a server issue. Please try again later." };
             }
         }
         
@@ -458,7 +444,7 @@ Provide the analysis in the specified JSON format, following all instructions.`;
             refreshIcon.classList.add('spinner');
             refreshText.textContent = 'Fetching Top Posts...';
             
-            for (let i = 0; i < 5; i++) {
+            for (let i = 0; i < 10; i++) {
                 trendsContainer.innerHTML += createPlaceholderCard();
                 summaryTableBody.innerHTML += createSummaryPlaceholderRow();
             }
@@ -467,7 +453,7 @@ Provide the analysis in the specified JSON format, following all instructions.`;
                 let topPosts = await fetchAndParsePosts(REDDIT_TOP_URL);
                 let trendsWithPrices = await getValidTrends(topPosts);
 
-                if (trendsWithPrices.length < 5) {
+                if (trendsWithPrices.length < 10) {
                     refreshText.textContent = 'Fetching Hot Posts...';
                     const hotPosts = await fetchAndParsePosts(REDDIT_HOT_URL);
                     const combinedPosts = [...topPosts];
@@ -487,7 +473,7 @@ Provide the analysis in the specified JSON format, following all instructions.`;
                      return;
                 }
                 
-                const finalTrends = trendsWithPrices.slice(0, 5);
+                const finalTrends = trendsWithPrices.slice(0, 10);
                 populateSummaryTable(finalTrends);
                 
                 trendsContainer.innerHTML = '';
@@ -566,6 +552,13 @@ Provide the analysis in the specified JSON format, following all instructions.`;
                  summaryTableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-yellow-400">No valid tickers found.</td></tr>`;
                  return;
             }
+
+            // Sort stocks by 1-day percentage change, descending
+            stocks.sort((a, b) => {
+                const changeA = a.change1d === 'N/A' ? -Infinity : parseFloat(a.change1d);
+                const changeB = b.change1d === 'N/A' ? -Infinity : parseFloat(b.change1d);
+                return changeB - changeA;
+            });
 
             const formatCell = (value) => {
                 if (value === 'N/A' || isNaN(value)) {
@@ -670,7 +663,7 @@ Provide the analysis in the specified JSON format, following all instructions.`;
 
                     <div class="border-t border-gray-700 my-4"></div>
                     <h3 class="text-lg font-semibold text-white mb-3 flex items-center">
-                        <svg class="w-5 h-5 mr-2 text-indigo-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 3.5a1.5 1.5 0 013 0V4a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-.5a1.5 1.5 0 000 3h.5a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-.5a1.5 1.5 SvgFile.js:1:1034) 0 00-3 0v.5a1 1 0 01-1 1H6a1 1 0 01-1-1v-3a1 1 0 011-1h.5a1.5 1.5 0 000-3H6a1 1 0 01-1-1V6a1 1 0 011-1h3a1 1 0 001-1v-.5z"></path></svg>
+                        <svg class="w-5 h-5 mr-2 text-indigo-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 3.5a1.5 1.5 0 013 0V4a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-.5a1.5 1.5 0 000 3h.5a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-.5a1.5 1.5 0 00-3 0v.5a1 1 0 01-1 1H6a1 1 0 01-1-1v-3a1 1 0 011-1h.5a1.5 1.5 0 000-3H6a1 1 0 01-1-1V6a1 1 0 011-1h3a1 1 0 001-1v-.5z"></path></svg>
                         Gemini AI Analysis
                     </h3>
                     <div class="analysis-content text-gray-300 text-sm">
@@ -694,4 +687,5 @@ Provide the analysis in the specified JSON format, following all instructions.`;
 
 </body>
 </html>
+
 
