@@ -189,9 +189,8 @@
 
 
         // API and Globals
-        const PROXY_URL = 'https://api.allorigins.win/raw?url=';
-        const REDDIT_TOP_URL = `${PROXY_URL}${encodeURIComponent('https://www.reddit.com/r/pennystocks/search.json?q=&restrict_sr=on&sort=top&t=month&limit=100')}`;
-        const REDDIT_HOT_URL = `${PROXY_URL}${encodeURIComponent('https://www.reddit.com/r/pennystocks/hot.json?limit=100')}`;
+        const REDDIT_TOP_URL = 'https://www.reddit.com/r/pennystocks/search.json?q=&restrict_sr=on&sort=top&t=month&limit=100';
+        const REDDIT_HOT_URL = 'https://www.reddit.com/r/pennystocks/hot.json?limit=100';
         let sandboxRefreshInterval = null;
 
         // --- NAVIGATION ---
@@ -320,63 +319,16 @@
 
         // --- MAIN PAGE LOGIC ---
 
-        // Helper for exponential backoff
-        const fetchWithBackoff = async (url, options, retries = 5, delay = 1000) => {
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetch(url, options);
-                    if (response.ok) return response;
-                    if (response.status === 429) { // Too Many Requests
-                        console.warn(`Rate limited. Retrying in ${delay / 1000}s...`);
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        delay *= 2; // Exponential backoff
-                    } else {
-                         // For CORS proxy errors, the status might be 200 but the content is an error page
-                        const text = await response.text();
-                        if (text.toLowerCase().includes('cors')) {
-                             throw new Error(`CORS Proxy Error: ${response.status}`);
-                        }
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                } catch (error) {
-                    console.error(`Fetch attempt ${i + 1} failed for ${url.substring(0,100)}...`, error);
-                    if (i === retries - 1) throw error;
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                    delay *= 2;
-                }
-            }
-        };
-
         // Function to get live and historical stock data from Yahoo Finance
         async function getStockData(ticker) {
             try {
-                const url = `${PROXY_URL}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=1y&interval=1d`)}`;
-                const response = await fetch(url);
-                if (!response.ok) return null;
+                const response = await fetch(`/api/getStockData?ticker=${ticker}`);
+                if (!response.ok) {
+                    console.error(`Failed to fetch stock data for ${ticker}: Server responded with ${response.status}`);
+                    return null;
+                };
                 const data = await response.json();
-
-                const result = data?.chart?.result?.[0];
-                if (!result || !result.meta || !result.indicators.quote?.[0]?.close) return null;
-                
-                const meta = result.meta;
-                const prices = result.indicators.quote[0].close;
-                const currentPrice = meta.regularMarketPrice;
-
-                if (currentPrice === undefined || prices.length === 0) return null;
-
-                const calcChange = (oldPrice) => {
-                    if (oldPrice === null || oldPrice === 0) return 'N/A';
-                    return (((currentPrice - oldPrice) / oldPrice) * 100).toFixed(2);
-                };
-
-                return {
-                    price: currentPrice.toFixed(4),
-                    isUp: currentPrice >= (meta.previousClose || currentPrice),
-                    change1d: calcChange(prices[prices.length - 2]),
-                    change5d: calcChange(prices[prices.length - 6]),
-                    change1mo: calcChange(prices[prices.length - 22]),
-                    change1y: calcChange(prices[0]),
-                };
+                return data;
             } catch (error) {
                 console.error(`Failed to fetch data for ${ticker}:`, error);
                 return null;
@@ -384,10 +336,10 @@
         }
         
         // Function to fetch and parse posts from a given Reddit URL
-        async function fetchAndParsePosts(url) {
-            const response = await fetch(url);
+        async function fetchAndParsePosts(redditUrl) {
+            const response = await fetch(`/api/getRedditPosts?url=${encodeURIComponent(redditUrl)}`);
             if (!response.ok) {
-                throw new Error(`Failed to fetch Reddit data from ${url}`);
+                throw new Error(`Failed to fetch Reddit data from ${redditUrl}`);
             }
             const data = await response.json();
             const posts = data.data.children;
@@ -421,14 +373,19 @@
                     body: JSON.stringify({ stock: stock })
                 });
 
+                const responseText = await response.text();
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `Request failed with status ${response.status}`);
+                    let errorMsg = `Request failed with status ${response.status}`;
+                    try {
+                        const errorJson = JSON.parse(responseText);
+                        errorMsg = errorJson.error || errorMsg;
+                    } catch(e) {
+                         console.error("Non-JSON error response from AI function:", responseText.substring(0, 200));
+                    }
+                    throw new Error(errorMsg);
                 }
                 
-                // The serverless function returns the JSON text directly in the body
-                const jsonText = await response.text();
-                return JSON.parse(jsonText);
+                return JSON.parse(responseText);
 
             } catch (error) {
                 console.error("AI analysis function call failed:", error);
@@ -475,6 +432,9 @@
                 
                 const finalTrends = trendsWithPrices.slice(0, 10);
                 populateSummaryTable(finalTrends);
+                
+                // Sort the posts by upvotes for the main card display
+                finalTrends.sort((a,b) => b.upvotes - a.upvotes);
                 
                 trendsContainer.innerHTML = '';
                 refreshText.textContent = 'Analyzing with AI...';
@@ -553,8 +513,11 @@
                  return;
             }
 
+            // Create a copy before sorting so it doesn't affect the post order
+            const sortedStocks = [...stocks];
+
             // Sort stocks by 1-day percentage change, descending
-            stocks.sort((a, b) => {
+            sortedStocks.sort((a, b) => {
                 const changeA = a.change1d === 'N/A' ? -Infinity : parseFloat(a.change1d);
                 const changeB = b.change1d === 'N/A' ? -Infinity : parseFloat(b.change1d);
                 return changeB - changeA;
@@ -569,7 +532,7 @@
                 return `<td class="px-6 py-4 text-right ${color}">${numValue >= 0 ? '+' : ''}${numValue}%</td>`;
             };
 
-            stocks.forEach(stock => {
+            sortedStocks.forEach(stock => {
                 const row = `
                     <tr class="bg-gray-800/50 border-b border-gray-700 hover:bg-gray-700/50">
                         <th scope="row" class="px-6 py-4 font-medium text-white whitespace-nowrap">${stock.ticker}</th>
@@ -687,5 +650,4 @@
 
 </body>
 </html>
-
 
