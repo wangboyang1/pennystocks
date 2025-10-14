@@ -7,23 +7,28 @@ exports.handler = async (event) => {
   }
 
   try {
-    // Add a User-Agent header to identify the request to Reddit's servers.
+    // Use a standard, browser-like User-Agent to prevent being blocked by Reddit.
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Netlify Function - Reddit Stock Analyzer v1.0'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36'
       }
     });
 
     if (!response.ok) {
+      const errorBody = await response.text();
+      console.error("Reddit API Fetch Error:", errorBody);
       return { statusCode: response.status, body: JSON.stringify({ error: `Failed to fetch from Reddit: ${response.statusText}` }) };
     }
+    
     const data = await response.json();
+    
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     };
   } catch (error) {
+    console.error("Serverless Function Error:", error);
     return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
   }
 };
