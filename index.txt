@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reddit Penny Stock AI Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .card-enter {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        .card-enter-active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+        .shimmer {
+            background: linear-gradient(90deg, #2d3748 25%, #4a5568 50%, #2d3748 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <!-- Header with Navigation -->
+        <div class="flex justify-between items-center mb-8">
+            <div class="text-left">
+                <h1 class="text-3xl md:text-5xl font-bold text-white mb-2">Reddit Penny Stock AI Analyzer</h1>
+                <p class="text-gray-400">Your AI-powered insight into Reddit's trending penny stocks.</p>
+            </div>
+            <button id="nav-to-sandbox-btn" class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                Sandbox
+            </button>
+        </div>
+        
+        <!-- Main Page Content -->
+        <main id="main-page">
+            <!-- Disclaimer -->
+            <div class="bg-yellow-900/50 border border-yellow-700 text-yellow-200 px-4 py-3 rounded-lg relative mb-6" role="alert">
+                <strong class="font-bold">Disclaimer:</strong>
+                <span class="block sm:inline">This app uses live Reddit, Yahoo Finance, and AI data. This is not financial advice. Always do your own research.</span>
+            </div>
+
+            <!-- Summary Table -->
+            <div class="mb-8 bg-gray-800/50 rounded-lg border border-gray-700 shadow-lg overflow-hidden">
+                <h2 class="text-xl font-bold text-white p-4 border-b border-gray-700">Performance Summary</h2>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm text-left text-gray-300">
+                        <thead class="text-xs text-gray-400 uppercase bg-gray-800">
+                            <tr>
+                                <th scope="col" class="px-6 py-3">Ticker</th>
+                                <th scope="col" class="px-6 py-3">Current Price</th>
+                                <th scope="col" class="px-6 py-3 text-right">1 Day %</th>
+                                <th scope="col" class="px-6 py-3 text-right">5 Day %</th>
+                                <th scope="col" class="px-6 py-3 text-right">1 Month %</th>
+                                <th scope="col" class="px-6 py-3 text-right">1 Year %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="summary-table-body">
+                            <!-- Summary rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+
+            <div class="flex justify-center mb-8">
+                <button id="refresh-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center transition-all duration-300 transform hover:scale-105 shadow-lg">
+                    <svg id="refresh-icon" class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M20 4h-5v5M4 20h5v-5"></path></svg>
+                    <span id="refresh-text">Refresh Live Trends</span>
+                </button>
+            </div>
+
+            <!-- Stock Trends Container -->
+            <div id="trends-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-6">
+                <!-- Stock cards will be injected here -->
+            </div>
+        </main>
+        
+        <!-- Sandbox Page Content -->
+        <main id="sandbox-page" class="hidden">
+            <button id="nav-to-main-btn" class="mb-4 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">&larr; Back to Trends</button>
+            
+            <!-- Sandbox Summary -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 text-center">
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                    <h3 class="text-gray-400 text-sm font-bold uppercase">Total Value</h3>
+                    <p id="sandbox-total-value" class="text-2xl font-bold text-white">$0.00</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                    <h3 class="text-gray-400 text-sm font-bold uppercase">Total Cost</h3>
+                    <p id="sandbox-total-cost" class="text-2xl font-bold text-white">$0.00</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                    <h3 class="text-gray-400 text-sm font-bold uppercase">Gain / Loss</h3>
+                    <p id="sandbox-total-pl" class="text-2xl font-bold text-white">$0.00 (0.00%)</p>
+                </div>
+            </div>
+
+            <!-- Add Stock Form -->
+            <div class="mb-8 bg-gray-800/50 p-6 rounded-lg border border-gray-700">
+                 <h2 class="text-xl font-bold text-white mb-4">Add Stock to Sandbox</h2>
+                 <form id="add-stock-form" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                     <div class="w-full">
+                         <label for="ticker" class="block text-sm font-medium text-gray-400">Ticker</label>
+                         <input type="text" id="ticker" name="ticker" required class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm text-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm h-10 px-3 uppercase" placeholder="e.g., GPUS">
+                     </div>
+                     <div class="w-full">
+                         <label for="purchaseDate" class="block text-sm font-medium text-gray-400">Purchase Date</label>
+                         <input type="date" id="purchaseDate" name="purchaseDate" required class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm text-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm h-10 px-3">
+                     </div>
+                     <div class="w-full">
+                         <label for="purchasePrice" class="block text-sm font-medium text-gray-400">Purchase Price</label>
+                         <input type="number" step="0.0001" id="purchasePrice" name="purchasePrice" required class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm text-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm h-10 px-3" placeholder="e.g., 1.25">
+                     </div>
+                      <div class="w-full">
+                         <label for="shares" class="block text-sm font-medium text-gray-400">Shares</label>
+                         <input type="number" step="1" id="shares" name="shares" required class="mt-1 block w-full bg-gray-700 border-gray-600 rounded-md shadow-sm text-white focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm h-10 px-3" placeholder="e.g., 100">
+                     </div>
+                     <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-10 px-4 rounded-lg transition-colors">Add Stock</button>
+                 </form>
+            </div>
+
+            <!-- Sandbox Portfolio Table -->
+            <div class="bg-gray-800/50 rounded-lg border border-gray-700 shadow-lg overflow-hidden">
+                <h2 class="text-xl font-bold text-white p-4 border-b border-gray-700">Sandbox Portfolio</h2>
+                 <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm text-left text-gray-300">
+                        <thead class="text-xs text-gray-400 uppercase bg-gray-800">
+                            <tr>
+                                <th scope="col" class="px-6 py-3">Ticker</th>
+                                <th scope="col" class="px-6 py-3">Shares</th>
+                                <th scope="col" class="px-6 py-3">Purchase Price</th>
+                                <th scope="col" class="px-6 py-3">Live Price</th>
+                                <th scope="col" class="px-6 py-3">Total Cost</th>
+                                <th scope="col" class="px-6 py-3">Current Value</th>
+                                <th scope="col" class="px-6 py-3 text-right">P/L %</th>
+                                <th scope="col" class="px-6 py-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="sandbox-table-body">
+                            <!-- Sandbox portfolio rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Page Elements
+        const mainPage = document.getElementById('main-page');
+        const sandboxPage = document.getElementById('sandbox-page');
+        const navToSandboxBtn = document.getElementById('nav-to-sandbox-btn');
+        const navToMainBtn = document.getElementById('nav-to-main-btn');
+
+        // Main Page Elements
+        const trendsContainer = document.getElementById('trends-container');
+        const summaryTableBody = document.getElementById('summary-table-body');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const refreshIcon = document.getElementById('refresh-icon');
+        const refreshText = document.getElementById('refresh-text');
+        
+        // Sandbox Page Elements
+        const addStockForm = document.getElementById('add-stock-form');
+        const sandboxTableBody = document.getElementById('sandbox-table-body');
+        const sandboxTotalValueEl = document.getElementById('sandbox-total-value');
+        const sandboxTotalCostEl = document.getElementById('sandbox-total-cost');
+        const sandboxTotalPlEl = document.getElementById('sandbox-total-pl');
+
+
+        // API and Globals
+        const API_KEY = ""; // In a real app, this would be handled securely on a server.
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${API_KEY}`;
+        const PROXY_URL = 'https://api.allorigins.win/raw?url=';
+        const REDDIT_TOP_URL = `${PROXY_URL}${encodeURIComponent('https://www.reddit.com/r/pennystocks/search.json?q=&restrict_sr=on&sort=top&t=month&limit=100')}`;
+        const REDDIT_HOT_URL = `${PROXY_URL}${encodeURIComponent('https://www.reddit.com/r/pennystocks/hot.json?limit=100')}`;
+        let sandboxRefreshInterval = null;
+
+        // --- NAVIGATION ---
+        navToSandboxBtn.addEventListener('click', () => {
+            mainPage.classList.add('hidden');
+            sandboxPage.classList.remove('hidden');
+            renderSandbox();
+            if (sandboxRefreshInterval) clearInterval(sandboxRefreshInterval);
+            sandboxRefreshInterval = setInterval(renderSandbox, 30000); // Refresh every 30s
+        });
+
+        navToMainBtn.addEventListener('click', () => {
+            sandboxPage.classList.add('hidden');
+            mainPage.classList.remove('hidden');
+            if (sandboxRefreshInterval) clearInterval(sandboxRefreshInterval);
+        });
+
+        // --- SANDBOX LOGIC ---
+        function getSandboxPortfolio() {
+            return JSON.parse(localStorage.getItem('pennySandboxPortfolio')) || [];
+        }
+
+        function saveSandboxPortfolio(portfolio) {
+            localStorage.setItem('pennySandboxPortfolio', JSON.stringify(portfolio));
+        }
+
+        addStockForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(addStockForm);
+            const portfolio = getSandboxPortfolio();
+            const newStock = {
+                id: Date.now(),
+                ticker: formData.get('ticker').toUpperCase(),
+                purchaseDate: formData.get('purchaseDate'),
+                purchasePrice: parseFloat(formData.get('purchasePrice')),
+                shares: parseFloat(formData.get('shares'))
+            };
+            portfolio.push(newStock);
+            saveSandboxPortfolio(portfolio);
+            addStockForm.reset();
+            document.getElementById('purchaseDate').valueAsDate = new Date();
+            renderSandbox();
+        });
+        
+        document.body.addEventListener('click', e => {
+            if (e.target.matches('.add-to-sandbox-btn')) {
+                const ticker = e.target.dataset.ticker;
+                const price = e.target.dataset.price;
+
+                navToSandboxBtn.click(); // Switch to sandbox page
+
+                // Pre-fill form
+                document.getElementById('ticker').value = ticker;
+                document.getElementById('purchasePrice').value = price;
+                document.getElementById('shares').focus();
+            }
+            if (e.target.matches('.remove-from-sandbox-btn')) {
+                const idToRemove = parseInt(e.target.dataset.id, 10);
+                let portfolio = getSandboxPortfolio();
+                portfolio = portfolio.filter(stock => stock.id !== idToRemove);
+                saveSandboxPortfolio(portfolio);
+                renderSandbox();
+            }
+        });
+
+
+        async function renderSandbox() {
+            const portfolio = getSandboxPortfolio();
+            sandboxTableBody.innerHTML = '';
+            
+            if (portfolio.length === 0) {
+                sandboxTableBody.innerHTML = `<tr><td colspan="8" class="text-center p-8 text-gray-500">Your sandbox is empty. Add a stock to begin.</td></tr>`;
+                sandboxTotalValueEl.textContent = '$0.00';
+                sandboxTotalCostEl.textContent = '$0.00';
+                sandboxTotalPlEl.textContent = '$0.00 (0.00%)';
+                return;
+            }
+
+            let totalValue = 0;
+            let totalCost = 0;
+
+            const stockPromises = portfolio.map(async (stock) => {
+                const liveData = await getStockData(stock.ticker);
+                const livePrice = liveData ? parseFloat(liveData.price) : stock.purchasePrice; // Fallback to purchase price if API fails
+                
+                const purchaseCost = stock.purchasePrice * stock.shares;
+                const currentValue = livePrice * stock.shares;
+                const pl = currentValue - purchaseCost;
+                const plPercent = purchaseCost > 0 ? (pl / purchaseCost) * 100 : 0;
+
+                totalCost += purchaseCost;
+                totalValue += currentValue;
+                
+                const plColor = pl >= 0 ? 'text-green-400' : 'text-red-400';
+
+                return `
+                    <tr class="bg-gray-800/50 border-b border-gray-700">
+                        <th scope="row" class="px-6 py-4 font-medium text-white whitespace-nowrap">${stock.ticker}</th>
+                        <td class="px-6 py-4">${stock.shares.toLocaleString()}</td>
+                        <td class="px-6 py-4">$${stock.purchasePrice.toFixed(4)}</td>
+                        <td class="px-6 py-4">$${livePrice.toFixed(4)}</td>
+                        <td class="px-6 py-4">$${purchaseCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="px-6 py-4">$${currentValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td class="px-6 py-4 text-right ${plColor} font-bold">${plPercent.toFixed(2)}%</td>
+                        <td class="px-6 py-4 text-right">
+                            <button class="remove-from-sandbox-btn text-red-500 hover:text-red-400" data-id="${stock.id}">Remove</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            const tableRows = await Promise.all(stockPromises);
+            sandboxTableBody.innerHTML = tableRows.join('');
+            
+            // Update summary
+            const totalPl = totalValue - totalCost;
+            const totalPlPercent = totalCost > 0 ? (totalPl / totalCost) * 100 : 0;
+            const totalPlColor = totalPl >= 0 ? 'text-green-400' : 'text-red-400';
+
+            sandboxTotalValueEl.textContent = `$${totalValue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            sandboxTotalCostEl.textContent = `$${totalCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            sandboxTotalPlEl.textContent = `$${totalPl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} (${totalPlPercent.toFixed(2)}%)`;
+            sandboxTotalPlEl.className = `text-2xl font-bold ${totalPlColor}`;
+        }
+
+
+        // --- MAIN PAGE LOGIC (UNCHANGED FROM PREVIOUS) ---
+
+        // Helper for exponential backoff
+        const fetchWithBackoff = async (url, options, retries = 5, delay = 1000) => {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.ok) return response;
+                    if (response.status === 429) { // Too Many Requests
+                        console.warn(`Rate limited. Retrying in ${delay / 1000}s...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; // Exponential backoff
+                    } else {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+        };
+
+        // Function to get live and historical stock data from Yahoo Finance
+        async function getStockData(ticker) {
+            try {
+                const url = `${PROXY_URL}${encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=1y&interval=1d`)}`;
+                const response = await fetch(url);
+                if (!response.ok) return null;
+                const data = await response.json();
+
+                const result = data?.chart?.result?.[0];
+                if (!result || !result.meta || !result.indicators.quote?.[0]?.close) return null;
+                
+                const meta = result.meta;
+                const prices = result.indicators.quote[0].close;
+                const currentPrice = meta.regularMarketPrice;
+
+                if (currentPrice === undefined || prices.length === 0) return null;
+
+                const calcChange = (oldPrice) => {
+                    if (oldPrice === null || oldPrice === 0) return 'N/A';
+                    return (((currentPrice - oldPrice) / oldPrice) * 100).toFixed(2);
+                };
+
+                return {
+                    price: currentPrice.toFixed(4),
+                    isUp: currentPrice >= (meta.previousClose || currentPrice),
+                    change1d: calcChange(prices[prices.length - 2]),
+                    change5d: calcChange(prices[prices.length - 6]),
+                    change1mo: calcChange(prices[prices.length - 22]),
+                    change1y: calcChange(prices[0]),
+                };
+            } catch (error) {
+                console.error(`Failed to fetch data for ${ticker}:`, error);
+                return null;
+            }
+        }
+        
+        // Function to fetch and parse posts from a given Reddit URL
+        async function fetchAndParsePosts(url) {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch Reddit data from ${url}`);
+            }
+            const data = await response.json();
+            const posts = data.data.children;
+            const tickerRegex = /\$[A-Z]{2,5}\b/g;
+            const validPosts = [];
+
+            for (const post of posts) {
+                const content = (post.data.title + ' ' + (post.data.selftext || ''));
+                const potentialTickers = [...new Set(content.match(tickerRegex) || [])];
+                
+                if (potentialTickers.length > 0) {
+                    validPosts.push({
+                        allTickers: potentialTickers.map(t => t.substring(1)),
+                        upvotes: post.data.score,
+                        postTitle: post.data.title,
+                        postUrl: `https://www.reddit.com${post.data.permalink}`,
+                        postBody: post.data.selftext || '',
+                    });
+                }
+            }
+            return validPosts;
+        }
+
+        // Function to get real analysis from Gemini AI
+        async function getRealAiAnalysis(stock) {
+            const systemPrompt = `You are a cautious financial analyst specializing in speculative penny stocks. Your analysis must be objective and highlight risks. For the given stock ticker, provide a structured JSON response with the following schema: {"companyName": "string", "intrinsicValue": "string", "profitPossibility": "string", "sellingPoint": "number", "stopLoss": "number"}.
+- First, analyze the provided 'Reddit Post Content' for any explicitly mentioned 'price target', 'PT', 'target price', or 'selling point'.
+- If a specific price is mentioned in the post, you MUST use that value for the 'sellingPoint' in your JSON response.
+- If no target is mentioned in the post, then generate your own plausible target price that is higher than the current price.
+- companyName: The full legal name of the company.
+- intrinsicValue: A brief, one-sentence analysis of its potential intrinsic value based on fundamentals, or lack thereof.
+- profitPossibility: A short-term profit outlook (e.g., 'Highly speculative, momentum-driven', 'High risk, catalyst dependent').
+- stopLoss: A plausible stop-loss price to manage downside risk, as a number. This MUST be lower than the current price.`;
+            
+            const truncatedBody = stock.postBody.substring(0, 2000);
+            const userQuery = `Analyze the penny stock with ticker: ${stock.ticker}.
+Current live price: $${stock.price}.
+Reddit Post Title: "${stock.postTitle}".
+Reddit Post Content: "${truncatedBody}".
+Provide the analysis in the specified JSON format, following all instructions.`;
+
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                }
+            };
+            
+            try {
+                const response = await fetchWithBackoff(GEMINI_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                const jsonText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!jsonText) throw new Error("Invalid AI response structure.");
+                return JSON.parse(jsonText);
+            } catch (error) {
+                console.error("Gemini API call failed:", error);
+                return { error: "AI analysis failed. Please try again." };
+            }
+        }
+        
+        // Main function to update the dashboard
+        async function updateDashboard() {
+            trendsContainer.innerHTML = '';
+            summaryTableBody.innerHTML = '';
+            refreshBtn.disabled = true;
+            refreshIcon.classList.add('spinner');
+            refreshText.textContent = 'Fetching Top Posts...';
+            
+            for (let i = 0; i < 5; i++) {
+                trendsContainer.innerHTML += createPlaceholderCard();
+                summaryTableBody.innerHTML += createSummaryPlaceholderRow();
+            }
+
+            try {
+                let topPosts = await fetchAndParsePosts(REDDIT_TOP_URL);
+                let trendsWithPrices = await getValidTrends(topPosts);
+
+                if (trendsWithPrices.length < 5) {
+                    refreshText.textContent = 'Fetching Hot Posts...';
+                    const hotPosts = await fetchAndParsePosts(REDDIT_HOT_URL);
+                    const combinedPosts = [...topPosts];
+                    const topPostUrls = new Set(topPosts.map(p => p.postUrl));
+                    hotPosts.forEach(post => {
+                        if (!topPostUrls.has(post.postUrl)) {
+                            combinedPosts.push(post);
+                        }
+                    });
+                    
+                    trendsWithPrices = await getValidTrends(combinedPosts);
+                }
+
+                if (trendsWithPrices.length === 0) {
+                     trendsContainer.innerHTML = `<p class="text-yellow-400 text-center col-span-full">Could not find any posts with valid, price-checkable tickers on r/pennystocks right now. The market might be closed. Please try again later.</p>`;
+                     summaryTableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-yellow-400">No valid tickers found.</td></tr>`;
+                     return;
+                }
+                
+                const finalTrends = trendsWithPrices.slice(0, 5);
+                populateSummaryTable(finalTrends);
+                
+                trendsContainer.innerHTML = '';
+                refreshText.textContent = 'Analyzing with AI...';
+                
+                let cardPromises = finalTrends.map(async (stock, index) => {
+                    const card = document.createElement('div');
+                    card.innerHTML = createStockCardHTML(stock);
+                    card.classList.add('card-enter');
+                    trendsContainer.appendChild(card);
+                    
+                    setTimeout(() => card.classList.add('card-enter-active'), 100 * index);
+                    
+                    const analysis = await getRealAiAnalysis(stock);
+                    
+                    const companyEl = card.querySelector('.company-name');
+                    const analysisEl = card.querySelector('.analysis-content');
+                    
+                    if (analysis.error) {
+                        if (companyEl) companyEl.textContent = 'Error';
+                        if (analysisEl) analysisEl.innerHTML = `<p class="text-red-400">${analysis.error}</p>`;
+                        return;
+                    }
+                    
+                    if (companyEl) companyEl.textContent = analysis.companyName || 'N/A';
+                    
+                    if(analysisEl) {
+                        analysisEl.innerHTML = `
+                            <p class="mb-3"><strong class="font-semibold text-gray-300">Intrinsic Value Analysis:</strong> ${analysis.intrinsicValue}</p>
+                            <p class="mb-4"><strong class="font-semibold text-gray-300">Short-Term Profit Outlook:</strong> ${analysis.profitPossibility}</p>
+                            <div class="flex flex-col sm:flex-row justify-around text-center gap-4">
+                                <div class="bg-green-900/50 p-3 rounded-lg">
+                                    <p class="text-sm text-green-300 font-semibold">Suggested Selling Point</p>
+                                    <p class="text-xl md:text-2xl font-bold text-white">$${analysis.sellingPoint.toFixed(2)}</p>
+                                </div>
+                                <div class="bg-red-900/50 p-3 rounded-lg">
+                                    <p class="text-sm text-red-300 font-semibold">Suggested Stop Loss</p>
+                                    <p class="text-xl md:text-2xl font-bold text-white">$${analysis.stopLoss.toFixed(2)}</p>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+
+                await Promise.all(cardPromises);
+
+            } catch (error) {
+                console.error("Failed to update dashboard:", error);
+                trendsContainer.innerHTML = `<p class="text-red-400 text-center col-span-full">${error.message}</p>`;
+                summaryTableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-red-400">Failed to load data.</td></tr>`;
+            } finally {
+                refreshBtn.disabled = false;
+                refreshIcon.classList.remove('spinner');
+                refreshText.textContent = 'Refresh Live Trends';
+            }
+        }
+
+        async function getValidTrends(posts) {
+            refreshText.textContent = 'Validating Tickers & Prices...';
+            const trends = [];
+            for (const post of posts) {
+                for (const ticker of post.allTickers) {
+                    const stockData = await getStockData(ticker);
+                    if (stockData !== null) {
+                        trends.push({ ...post, ticker, ...stockData });
+                        break; 
+                    }
+                }
+            }
+            return trends;
+        }
+
+        function populateSummaryTable(stocks) {
+            summaryTableBody.innerHTML = '';
+            if (stocks.length === 0) {
+                 summaryTableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-yellow-400">No valid tickers found.</td></tr>`;
+                 return;
+            }
+
+            const formatCell = (value) => {
+                if (value === 'N/A' || isNaN(value)) {
+                    return `<td class="px-6 py-4 text-right text-gray-500">N/A</td>`;
+                }
+                const numValue = parseFloat(value);
+                const color = numValue >= 0 ? 'text-green-400' : 'text-red-400';
+                return `<td class="px-6 py-4 text-right ${color}">${numValue >= 0 ? '+' : ''}${numValue}%</td>`;
+            };
+
+            stocks.forEach(stock => {
+                const row = `
+                    <tr class="bg-gray-800/50 border-b border-gray-700 hover:bg-gray-700/50">
+                        <th scope="row" class="px-6 py-4 font-medium text-white whitespace-nowrap">${stock.ticker}</th>
+                        <td class="px-6 py-4">$${stock.price}</td>
+                        ${formatCell(stock.change1d)}
+                        ${formatCell(stock.change5d)}
+                        ${formatCell(stock.change1mo)}
+                        ${formatCell(stock.change1y)}
+                    </tr>
+                `;
+                summaryTableBody.innerHTML += row;
+            });
+        }
+        
+        function createSummaryPlaceholderRow() {
+            return `
+                 <tr class="bg-gray-800/50 border-b border-gray-700">
+                    <td class="px-6 py-4"><div class="h-4 bg-gray-700 rounded w-12 shimmer"></div></td>
+                    <td class="px-6 py-4"><div class="h-4 bg-gray-700 rounded w-16 shimmer"></div></td>
+                    <td class="px-6 py-4 text-right"><div class="h-4 bg-gray-700 rounded w-10 shimmer ml-auto"></div></td>
+                    <td class="px-6 py-4 text-right"><div class="h-4 bg-gray-700 rounded w-10 shimmer ml-auto"></div></td>
+                    <td class="px-6 py-4 text-right"><div class="h-4 bg-gray-700 rounded w-10 shimmer ml-auto"></div></td>
+                    <td class="px-6 py-4 text-right"><div class="h-4 bg-gray-700 rounded w-10 shimmer ml-auto"></div></td>
+                </tr>
+            `;
+        }
+
+        function createPlaceholderCard() {
+             return `
+                <div class="bg-gray-800 rounded-lg shadow-2xl p-6 border border-gray-700">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="w-1/2">
+                            <div class="flex items-baseline gap-3">
+                                <div class="w-1/3 h-8 bg-gray-700 rounded shimmer"></div>
+                                <div class="w-1/3 h-8 bg-gray-700 rounded shimmer"></div>
+                            </div>
+                            <div class="w-2/3 h-4 bg-gray-700 rounded mt-2 shimmer"></div>
+                        </div>
+                        <div class="w-1/4">
+                            <div class="w-full h-6 bg-gray-700 rounded shimmer"></div>
+                            <div class="w-full h-4 bg-gray-700 rounded mt-2 shimmer"></div>
+                        </div>
+                    </div>
+                    <div class="w-full h-6 bg-gray-700 rounded mb-4 shimmer"></div>
+                    <div class="border-t border-gray-700 my-4"></div>
+                    <div class="w-1/3 h-6 bg-gray-700 rounded mb-3 shimmer"></div>
+                    <div class="space-y-2">
+                        <div class="w-full h-4 bg-gray-700 rounded shimmer"></div>
+                        <div class="w-5/6 h-4 bg-gray-700 rounded shimmer"></div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function createStockCardHTML(stock) {
+            const priceColor = stock.isUp ? 'text-green-400' : 'text-red-400';
+            return `
+                <div class="bg-gray-800 rounded-lg shadow-2xl p-6 border border-gray-700 transform transition-transform duration-300 hover:-translate-y-1">
+                    <div class="flex flex-col sm:flex-row justify-between sm:items-start mb-4">
+                        <div>
+                            <div class="flex items-baseline gap-3">
+                                <a href="https://finance.yahoo.com/quote/${stock.ticker}" target="_blank" rel="noopener noreferrer" class="group">
+                                    <h2 class="text-2xl font-bold text-white group-hover:text-indigo-400 group-hover:underline flex items-center">
+                                        ${stock.ticker}
+                                        <svg class="w-4 h-4 ml-1.5 opacity-50 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                    </h2>
+                                </a>
+                                <p class="text-2xl font-semibold ${priceColor}">$${stock.price} <span class="text-xs text-gray-500">(Live)</span></p>
+                            </div>
+                            <p class="text-sm text-gray-400 company-name">Fetching company name...</p>
+                        </div>
+                        <div class="text-left sm:text-right mt-2 sm:mt-0">
+                             <p class="text-lg font-semibold text-indigo-400">${stock.upvotes.toLocaleString()} Upvotes</p>
+                             <p class="text-sm text-gray-500">Trending Post</p>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
+                        <p class="text-sm text-gray-400">Top Mention Post:</p>
+                        <a href="${stock.postUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-200 hover:text-indigo-400 hover:underline inline-flex items-center group">
+                            <span class="truncate" style="max-width: 90%;">${stock.postTitle}</span>
+                            <svg class="w-4 h-4 ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                        </a>
+                    </div>
+
+                     <div class="mt-4 flex justify-end">
+                        <button class="add-to-sandbox-btn bg-indigo-500/80 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg text-sm transition-colors" data-ticker="${stock.ticker}" data-price="${stock.price}">
+                            Add to Sandbox
+                        </button>
+                    </div>
+
+                    <div class="border-t border-gray-700 my-4"></div>
+                    <h3 class="text-lg font-semibold text-white mb-3 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-indigo-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 3.5a1.5 1.5 0 013 0V4a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-.5a1.5 1.5 0 000 3h.5a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-.5a1.5 1.5 SvgFile.js:1:1034) 0 00-3 0v.5a1 1 0 01-1 1H6a1 1 0 01-1-1v-3a1 1 0 011-1h.5a1.5 1.5 0 000-3H6a1 1 0 01-1-1V6a1 1 0 011-1h3a1 1 0 001-1v-.5z"></path></svg>
+                        Gemini AI Analysis
+                    </h3>
+                    <div class="analysis-content text-gray-300 text-sm">
+                        <div class="flex items-center justify-center py-8">
+                             <svg class="spinner w-8 h-8 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                             <p class="ml-3">Processing...</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDashboard();
+            // Set default date for sandbox form
+            document.getElementById('purchaseDate').valueAsDate = new Date();
+        });
+        refreshBtn.addEventListener('click', updateDashboard);
+    </script>
+
+</body>
+</html>
+
