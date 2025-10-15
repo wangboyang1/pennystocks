@@ -189,6 +189,7 @@
 
 
         // API and Globals
+        const PROXY_URL = 'https://cors.eu.org/';
         const REDDIT_TOP_URL = 'https://www.reddit.com/r/pennystocks/search.json?q=&restrict_sr=on&sort=top&t=month&limit=100';
         const REDDIT_HOT_URL = 'https://www.reddit.com/r/pennystocks/hot.json?limit=100';
         let sandboxRefreshInterval = null;
@@ -322,13 +323,34 @@
         // Function to get live and historical stock data from Yahoo Finance
         async function getStockData(ticker) {
             try {
-                const response = await fetch(`/api/getStockData?ticker=${ticker}`);
-                if (!response.ok) {
-                    console.error(`Failed to fetch stock data for ${ticker}: Server responded with ${response.status}`);
-                    return null;
-                };
+                const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=1y&interval=1d`;
+                const url = `${PROXY_URL}${yahooUrl}`;
+                const response = await fetch(url);
+                if (!response.ok) return null;
                 const data = await response.json();
-                return data;
+
+                const result = data?.chart?.result?.[0];
+                if (!result || !result.meta || !result.indicators.quote?.[0]?.close) return null;
+                
+                const meta = result.meta;
+                const prices = result.indicators.quote[0].close;
+                const currentPrice = meta.regularMarketPrice;
+
+                if (currentPrice === undefined || prices.length === 0) return null;
+
+                const calcChange = (oldPrice) => {
+                    if (oldPrice === null || oldPrice === 0) return 'N/A';
+                    return (((currentPrice - oldPrice) / oldPrice) * 100).toFixed(2);
+                };
+
+                return {
+                    price: currentPrice.toFixed(4),
+                    isUp: currentPrice >= (meta.previousClose || currentPrice),
+                    change1d: calcChange(prices[prices.length - 2]),
+                    change5d: calcChange(prices[prices.length - 6]),
+                    change1mo: calcChange(prices[prices.length - 22]),
+                    change1y: calcChange(prices[0]),
+                };
             } catch (error) {
                 console.error(`Failed to fetch data for ${ticker}:`, error);
                 return null;
@@ -337,37 +359,41 @@
         
         // Function to fetch and parse posts from a given Reddit URL
         async function fetchAndParsePosts(redditUrl) {
-            const response = await fetch(`/api/getRedditPosts?url=${encodeURIComponent(redditUrl)}`);
-            if (!response.ok) {
+             try {
+                const response = await fetch(`${PROXY_URL}${redditUrl}`);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch Reddit data from ${redditUrl}`);
+                }
+                const data = await response.json();
+                const posts = data.data.children;
+                const tickerRegex = /\$[A-Z]{2,5}\b/g;
+                const validPosts = [];
+
+                for (const post of posts) {
+                    const content = (post.data.title + ' ' + (post.data.selftext || ''));
+                    const potentialTickers = [...new Set(content.match(tickerRegex) || [])];
+                    
+                    if (potentialTickers.length > 0) {
+                        validPosts.push({
+                            allTickers: potentialTickers.map(t => t.substring(1)),
+                            upvotes: post.data.score,
+                            postTitle: post.data.title,
+                            postUrl: `https://www.reddit.com${post.data.permalink}`,
+                            postBody: post.data.selftext || '',
+                        });
+                    }
+                }
+                return validPosts;
+            } catch (error) {
+                 console.error(`Error fetching from ${redditUrl}:`, error);
                 throw new Error(`Failed to fetch Reddit data from ${redditUrl}`);
             }
-            const data = await response.json();
-            const posts = data.data.children;
-            const tickerRegex = /\$[A-Z]{2,5}\b/g;
-            const validPosts = [];
-
-            for (const post of posts) {
-                const content = (post.data.title + ' ' + (post.data.selftext || ''));
-                const potentialTickers = [...new Set(content.match(tickerRegex) || [])];
-                
-                if (potentialTickers.length > 0) {
-                    validPosts.push({
-                        allTickers: potentialTickers.map(t => t.substring(1)),
-                        upvotes: post.data.score,
-                        postTitle: post.data.title,
-                        postUrl: `https://www.reddit.com${post.data.permalink}`,
-                        postBody: post.data.selftext || '',
-                    });
-                }
-            }
-            // Reddit API for search with sort=top already returns posts sorted by upvotes
-            return validPosts;
         }
 
         // Function to get real analysis from Gemini AI
         async function getRealAiAnalysis(stock) {
             try {
-                const response = await fetch('/api/getAiAnalysis', {
+                const response = await fetch(`${window.location.origin}/api/getAiAnalysis`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ stock: stock })
