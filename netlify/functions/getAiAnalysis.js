@@ -27,24 +27,22 @@ exports.handler = async (event) => {
 
   const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${geminiApiKey}`;
 
-  // This is the new, more sophisticated prompt.
-  const systemPrompt = `You are an AI assistant with the persona of the Head of Research at an elite quantitative fund. Your analysis is sharp, concise, and objective. Your task is to provide a qualitative analysis of a penny stock based on publicly available information and the sentiment from a provided Reddit post.
-
-You will structure your response in a specific JSON format with the following schema:
-{"companyName": "string", "bullCase": "string", "bearCase": "string", "socialSentiment": "string", "concludingTake": "string"}
-
+  // This prompt matches the data structure expected by your index.html file.
+  const systemPrompt = `You are a cautious financial analyst specializing in speculative penny stocks. Your analysis must be objective and highlight risks. For the given stock ticker, provide a structured JSON response with the following schema: {"companyName": "string", "intrinsicValue": "string", "profitPossibility": "string", "sellingPoint": "number", "stopLoss": "number"}.
+- First, analyze the provided 'Reddit Post Content' for any explicitly mentioned 'price target', 'PT', 'target price', or 'selling point'.
+- If a specific price is mentioned in the post, you MUST use that value for the 'sellingPoint' in your JSON response.
+- If no target is mentioned in the post, then generate your own plausible target price that is higher than the current price.
 - companyName: The full legal name of the company.
-- bullCase: A few bullet points summarizing the potential positive catalysts or arguments for the stock. This should be based on factors like recent news, sector trends, or stated fundamentals if available.
-- bearCase: A few bullet points summarizing the significant risks and potential downsides. This should highlight common penny stock risks like dilution, lack of profitability, competition, or negative financials.
-- socialSentiment: A one-sentence summary of the sentiment from the provided Reddit post. Note if it's speculative, based on technical analysis, or discusses a fundamental catalyst.
-- concludingTake: A high-level, concluding paragraph synthesizing the bull and bear cases. Use sophisticated language (e.g., "asymmetric risk/reward," "catalyst-driven momentum play," "show-me story"). This section must conclude with the exact phrase: "This is a high-level overview for informational purposes and is not financial advice."`;
+- intrinsicValue: A brief, one-sentence analysis of its potential intrinsic value based on fundamentals, or lack thereof.
+- profitPossibility: A short-term profit outlook (e.g., 'Highly speculative, momentum-driven', 'High risk, catalyst dependent').
+- stopLoss: A plausible stop-loss price to manage downside risk, as a number. This MUST be lower than the current price.`;
 
   const truncatedBody = (stock.postBody || '').substring(0, 2000);
   const userQuery = `Analyze the penny stock with ticker: ${stock.ticker}.
 Current live price: $${stock.price}.
 Reddit Post Title: "${stock.postTitle}".
 Reddit Post Content: "${truncatedBody}".
-Provide the analysis in the specified JSON format, following all instructions precisely.`;
+Provide the analysis in the specified JSON format, following all instructions.`;
 
   const payload = {
     contents: [{ parts: [{ text: userQuery }] }],
@@ -54,7 +52,7 @@ Provide the analysis in the specified JSON format, following all instructions pr
     }
   };
 
-  console.log("Attempting to fetch from Gemini API with new prompt...");
+  console.log("Attempting to fetch from Gemini API...");
   try {
     const response = await fetch(GEMINI_API_URL, {
       method: 'POST',
@@ -79,7 +77,6 @@ Provide the analysis in the specified JSON format, following all instructions pr
     }
     
     console.log("Successfully received and parsed AI analysis.");
-    // The API's response is a JSON string, which we will parse and return as a JSON object.
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
